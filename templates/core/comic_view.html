@@ -1,0 +1,313 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ comic.concept.title }} — Comic{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="breadcrumb">
+    <a href="{% url 'dashboard' %}">Dashboard</a>
+    <span class="breadcrumb-sep">›</span>
+    <a href="{% url 'textbook_detail' comic.concept.chapter.textbook.pk %}">{{ comic.concept.chapter.textbook.title|truncatechars:25 }}</a>
+    <span class="breadcrumb-sep">›</span>
+    <span>{{ comic.concept.title|truncatechars:30 }}</span>
+  </div>
+</div>
+
+{% if comic.status == 'generating' or comic.status == 'pending' %}
+<!-- Still generating -->
+<div class="generation-panel" style="max-width:600px; margin:2rem auto;">
+  <div class="spinner" style="margin:0 auto 1rem;width:40px;height:40px;"></div>
+  <div style="font-weight:700;font-size:1.1rem;margin-bottom:0.5rem;">Generating your comic…</div>
+  <div style="color:var(--text-muted);font-size:0.875rem;margin-bottom:1.5rem;">
+    Your RTX 4060 is working hard! Please wait 2–5 minutes.
+  </div>
+  <div id="panel-count" style="font-size:0.875rem;color:var(--text-accent);"></div>
+  <div style="margin-top:1.5rem;">
+    <a href="{% url 'concept_detail' comic.concept.pk %}" class="btn btn-secondary">← Back to Concept</a>
+  </div>
+</div>
+
+{% elif comic.status == 'error' %}
+<div class="alert alert-error" style="max-width:600px;">
+  <strong>Generation failed:</strong> {{ comic.error_message }}
+</div>
+<a href="{% url 'concept_detail' comic.concept.pk %}" class="btn btn-secondary">← Try Again</a>
+
+{% else %}
+<!-- Comic is ready! -->
+<div class="two-col" style="gap:2rem;">
+  <!-- Left: Comic Reader -->
+  <div class="two-col-left">
+
+    <!-- Title Banner -->
+    <div class="comic-title-header">
+      <div class="badge badge-yellow" style="margin-bottom:0.5rem;">
+        {{ comic.get_art_style_display }} · {{ comic.get_level_display }}
+      </div>
+      <h1>{{ comic.concept.title }}</h1>
+      <p>{{ comic.concept.description|truncatechars:120 }}</p>
+    </div>
+
+    <!-- Top controls -->
+    <div class="flex-between mb-2">
+      <div style="font-size:0.8rem;color:var(--text-muted);">
+        <span id="current-panel-label">Panel 1</span> of {{ total_panels }}
+      </div>
+      <div class="flex gap-1">
+        <a href="{{ comic.concept.chapter.textbook.pdf_file.url }}" target="_blank" class="btn btn-secondary btn-sm">📄 View Source</a>
+        <button onclick="window.print()" class="btn btn-secondary btn-sm">⬇ Download</button>
+        <form method="post" action="{% url 'comic_rerender' comic.pk %}" style="display:inline;" id="rerender-form">
+          {% csrf_token %}
+          <button type="button" class="btn btn-secondary btn-sm"
+                  onclick="if(confirm('Re-apply improved layout to all panels? (takes ~5 sec, no new AI needed)')){document.getElementById('rerender-form').submit();}"
+                  title="Upgrade panel layout with larger text and content boxes">
+            🔄 Re-render Layout
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Panel Display -->
+    <div class="comic-panel-display">
+      {% for panel in panels %}
+      <div class="comic-panel-slide {% if not forloop.first %}hidden{% endif %}" id="panel-{{ panel.panel_number }}">
+        {% if panel.image %}
+          <img src="{{ panel.image.url }}" alt="Panel {{ panel.panel_number }}" class="comic-panel-image">
+        {% else %}
+          <div class="comic-panel-image flex-center" style="background:var(--bg-elevated);">
+            <span style="color:var(--text-muted);font-size:2rem;">🎨</span>
+          </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Navigation -->
+    <div class="comic-nav" style="margin-top:1rem;">
+      <button class="btn btn-secondary" id="prev-btn" onclick="navigate(-1)" disabled>← Prev</button>
+      <div class="flex" style="gap:0.5rem;" id="dot-nav">
+        {% for panel in panels %}
+        <div class="comic-nav-dot {% if forloop.first %}active{% endif %}"
+             onclick="goToPanel({{ panel.panel_number }})"
+             id="dot-{{ panel.panel_number }}"
+             title="Panel {{ panel.panel_number }}"></div>
+        {% endfor %}
+      </div>
+      <button class="btn btn-primary" id="next-btn" onclick="navigate(1)">Next →</button>
+    </div>
+
+    <!-- Panel description -->
+    <div style="margin-top:1.5rem; background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:var(--radius-lg); padding:1.25rem;" id="panel-description">
+      {% for panel in panels %}
+      <div class="panel-desc-content {% if not forloop.first %}hidden{% endif %}" id="desc-{{ panel.panel_number }}">
+        {% if panel.caption %}
+        <div style="font-size:0.875rem;color:var(--text-secondary);line-height:1.6;">
+          {{ panel.caption }}
+        </div>
+        {% endif %}
+        {% if panel.scene_description %}
+        <div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.5rem;font-style:italic;">
+          Scene: {{ panel.scene_description|truncatechars:200 }}
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Prev/Next concept navigation -->
+    <div class="flex-between mt-4">
+      {% if prev_concept %}
+      <a href="{% url 'concept_detail' prev_concept.pk %}" class="btn btn-secondary">
+        ← {{ prev_concept.title|truncatechars:25 }}
+      </a>
+      {% else %}
+      <div></div>
+      {% endif %}
+
+      {% if next_concept %}
+      <a href="{% url 'concept_detail' next_concept.pk %}" class="btn btn-primary">
+        {{ next_concept.title|truncatechars:25 }} →
+      </a>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Right Sidebar: Concepts + Quiz -->
+  <div class="two-col-right">
+
+    <!-- Concept Navigation -->
+    <div class="comic-sidebar mb-2">
+      <div class="comic-sidebar-title">Concepts in This Chapter</div>
+      {% for sibling in comic.concept.chapter.concepts.all %}
+      <a href="{% url 'concept_detail' sibling.pk %}"
+         class="concept-nav-item {% if sibling.pk == comic.concept.pk %}active{% endif %}">
+        <span>{{ sibling.title|truncatechars:30 }}</span>
+        {% if sibling.pk == comic.concept.pk %}
+        <span style="color:var(--accent-purple);">●</span>
+        {% endif %}
+      </a>
+      {% endfor %}
+    </div>
+
+    <!-- Quick Quiz -->
+    {% if quizzes %}
+    <div class="quiz-card" id="quiz-container">
+      <div class="flex-between mb-2">
+        <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);">🧠 Quick Check</div>
+        <div style="font-size:0.75rem;color:var(--text-muted);" id="quiz-progress-text">Question 1 of {{ quizzes|length }}</div>
+      </div>
+
+      {% for quiz in quizzes %}
+      <div class="quiz-slide {% if not forloop.first %}hidden{% endif %}" id="quiz-slide-{{ forloop.counter0 }}">
+        <div class="quiz-question">{{ quiz.question }}</div>
+        <div class="quiz-options" id="quiz-opts-{{ quiz.pk }}">
+          {% for option in quiz.options %}
+          <div class="quiz-option" onclick="pickAnswer(this, '{{ quiz.pk }}', {{ forloop.counter0 }})">
+            <div class="quiz-radio"></div>
+            <span>{{ option }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        <div id="quiz-res-{{ quiz.pk }}" class="quiz-result"></div>
+        <button class="btn btn-primary btn-full" onclick="checkAnswer('{{ quiz.pk }}', {{ forloop.counter0 }})" id="qbtn-{{ quiz.pk }}">
+          Check Answer
+        </button>
+        <button class="btn btn-secondary btn-full hidden mt-2" onclick="nextQuiz({{ forloop.counter0 }})" id="nextqbtn-{{ quiz.pk }}">
+          Next Question →
+        </button>
+      </div>
+      {% endfor %}
+
+      <div class="quiz-slide hidden" id="quiz-summary-slide">
+        <div style="text-align:center; padding: 2rem 0;">
+          <div style="font-size:3rem; margin-bottom:1rem;">🏆</div>
+          <h3 style="margin-bottom:0.5rem;">Quiz Complete!</h3>
+          <p style="color:var(--text-muted); margin-bottom:1.5rem;">You scored <span id="final-score" style="color:var(--accent-purple); font-weight:bold;">0</span> out of {{ quizzes|length }}.</p>
+          <a href="{% url 'progress' %}" class="btn btn-primary btn-full">View Progress Dashboard</a>
+        </div>
+      </div>
+
+      <div class="divider mt-4"></div>
+      <div style="font-size:0.75rem;color:var(--text-muted);font-weight:600;margin-bottom:0.5rem;">Want to learn more?</div>
+      <div class="flex gap-1 flex-wrap">
+        <a href="{% url 'concept_detail' comic.concept.pk %}" class="btn btn-secondary btn-sm">🎨 New Comic</a>
+        <a href="{{ comic.concept.chapter.textbook.pdf_file.url }}" target="_blank" class="btn btn-secondary btn-sm">📄 Read Source</a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentPanel = 1;
+const totalPanels = {{ total_panels|default:0 }};
+
+function navigate(dir) {
+  goToPanel(currentPanel + dir);
+}
+
+function goToPanel(num) {
+  if (num < 1 || num > totalPanels) return;
+
+  // Hide current, show new
+  document.getElementById(`panel-${currentPanel}`)?.classList.add('hidden');
+  document.getElementById(`desc-${currentPanel}`)?.classList.add('hidden');
+  document.getElementById(`dot-${currentPanel}`)?.classList.remove('active');
+
+  currentPanel = num;
+  document.getElementById(`panel-${currentPanel}`)?.classList.remove('hidden');
+  document.getElementById(`desc-${currentPanel}`)?.classList.remove('hidden');
+  document.getElementById(`dot-${currentPanel}`)?.classList.add('active');
+
+  document.getElementById('current-panel-label').textContent = `Panel ${currentPanel}`;
+  document.getElementById('prev-btn').disabled = currentPanel <= 1;
+  document.getElementById('next-btn').disabled = currentPanel >= totalPanels;
+}
+
+// Keyboard navigation
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight') navigate(1);
+  if (e.key === 'ArrowLeft') navigate(-1);
+});
+
+// Quiz
+let picked = {};
+let quizScore = 0;
+const totalQuizzes = {{ quizzes|length|default:0 }};
+
+function pickAnswer(el, qid, idx) {
+  document.querySelectorAll(`#quiz-opts-${qid} .quiz-option`).forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  picked[qid] = idx;
+}
+function checkAnswer(qid, slideIdx) {
+  const sel = picked[qid];
+  if (sel === undefined) { alert('Select an answer!'); return; }
+
+  fetch(`/quiz/${qid}/submit/`, {
+    method: 'POST',
+    headers: { 'X-CSRFToken': getCookie('csrftoken'), 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `selected_index=${sel}`,
+  })
+  .then(r => r.json())
+  .then(data => {
+    const res = document.getElementById(`quiz-res-${qid}`);
+    document.querySelectorAll(`#quiz-opts-${qid} .quiz-option`).forEach((opt, i) => {
+      if (i === data.correct_index) opt.classList.add('correct');
+      else if (i === sel && !data.correct) opt.classList.add('wrong');
+    });
+    res.style.display = 'block';
+    res.className = data.correct ? 'quiz-result correct-msg' : 'quiz-result wrong-msg';
+    res.textContent = (data.correct ? '✅ Correct! ' : '❌ Not quite. ') + data.explanation;
+    
+    if (data.correct) quizScore++;
+    
+    document.getElementById(`qbtn-${qid}`).classList.add('hidden');
+    document.getElementById(`nextqbtn-${qid}`).classList.remove('hidden');
+    if (slideIdx === totalQuizzes - 1) {
+      document.getElementById(`nextqbtn-${qid}`).textContent = "View Summary";
+    }
+  });
+}
+
+function nextQuiz(currentIndex) {
+  document.getElementById(`quiz-slide-${currentIndex}`).classList.add('hidden');
+  const nextIndex = currentIndex + 1;
+  
+  if (nextIndex < totalQuizzes) {
+    document.getElementById(`quiz-slide-${nextIndex}`).classList.remove('hidden');
+    document.getElementById('quiz-progress-text').textContent = `Question ${nextIndex + 1} of ${totalQuizzes}`;
+  } else {
+    document.getElementById('quiz-summary-slide').classList.remove('hidden');
+    document.getElementById('quiz-progress-text').textContent = "Quiz Complete";
+    document.getElementById('final-score').textContent = quizScore;
+  }
+}
+function getCookie(name) {
+  let v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+  return v ? v[2] : null;
+}
+
+// Poll if still generating
+{% if comic.status == 'generating' or comic.status == 'pending' %}
+function poll() {
+  fetch('/comic/{{ comic.pk }}/status/')
+    .then(r => r.json())
+    .then(data => {
+      if (data.panels_ready) {
+        document.getElementById('panel-count').textContent = `${data.panels_ready} panels generated…`;
+      }
+      if (data.status === 'ready') location.reload();
+      else if (data.status === 'error') location.reload();
+      else setTimeout(poll, 5000);
+    })
+    .catch(() => setTimeout(poll, 6000));
+}
+setTimeout(poll, 5000);
+{% endif %}
+</script>
+{% endblock %}

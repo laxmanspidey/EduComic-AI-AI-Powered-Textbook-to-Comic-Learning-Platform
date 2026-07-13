@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">📚 AI Visual Learning Studio</h1>
+  <p class="page-subtitle">Transform your textbooks into immersive comic lessons powered by AI</p>
+</div>
+
+<!-- Stats -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-value">{{ textbooks.count }}</div>
+    <div class="stat-label">📕 Textbooks</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ total_concepts }}</div>
+    <div class="stat-label">💡 Concepts</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ viewed_concepts }}</div>
+    <div class="stat-label">✅ Learned</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ recent_comics|length }}</div>
+    <div class="stat-label">🎨 Comics Made</div>
+  </div>
+</div>
+
+<!-- Quick action -->
+{% if not textbooks %}
+<div class="card" style="border: 2px dashed var(--border-accent); text-align:center; padding: 3rem;">
+  <div style="font-size:3.5rem; margin-bottom:1rem;">📤</div>
+  <h2 style="font-size:1.2rem; font-weight:700; margin-bottom:0.5rem;">Upload your first textbook</h2>
+  <p style="color:var(--text-muted); margin-bottom:1.5rem; font-size:0.9rem;">
+    Upload any PDF textbook and AI will extract chapters, concepts, and generate comic lessons.
+  </p>
+  <a href="{% url 'textbook_upload' %}" class="btn btn-comic btn-lg">
+    🚀 Upload Now
+  </a>
+</div>
+{% else %}
+
+<!-- Textbooks section -->
+<div class="flex-between mb-2">
+  <h2 style="font-size:1.1rem; font-weight:700;">My Textbooks</h2>
+  <a href="{% url 'textbook_upload' %}" class="btn btn-primary btn-sm">+ Upload New</a>
+</div>
+
+<div class="textbook-grid mb-4">
+  {% for book in textbooks %}
+  <a href="{% url 'textbook_detail' book.pk %}" class="textbook-card" style="text-decoration:none;">
+    <div class="textbook-card-header">
+      <div class="textbook-card-icon">📖</div>
+      <div>
+        <div class="textbook-card-title">{{ book.title }}</div>
+        {% if book.subject %}
+        <div style="font-size:0.75rem; color:rgba(255,255,255,0.65); margin-top:0.2rem;">{{ book.subject }}</div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="textbook-card-body">
+      <div class="flex items-center gap-1" style="margin-bottom:0.6rem;">
+        <span class="status-dot {{ book.status }}"></span>
+        <span style="font-size:0.75rem; color:var(--text-muted);">
+          {% if book.status == 'processing' %}Processing…
+          {% elif book.status == 'ready' %}Ready · {{ book.chapter_count }} chapters · {{ book.concept_count }} concepts
+          {% elif book.status == 'error' %}Error
+          {% else %}Uploaded{% endif %}
+        </span>
+      </div>
+      {% if book.total_pages %}
+      <div style="font-size:0.75rem; color:var(--text-muted);">{{ book.total_pages }} pages</div>
+      {% endif %}
+      <div class="textbook-card-meta">
+        <span class="badge badge-purple">{{ book.grade_level|default:"All levels" }}</span>
+        <span style="font-size:0.75rem; color:var(--text-muted);">{{ book.created_at|date:"M d" }}</span>
+      </div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Recent Comics -->
+{% if recent_comics %}
+<div class="flex-between mb-2">
+  <h2 style="font-size:1.1rem; font-weight:700;">Recent Comics</h2>
+  <a href="{% url 'library' %}" class="btn btn-secondary btn-sm">View All</a>
+</div>
+
+<div class="comic-grid">
+  {% for comic in recent_comics %}
+  <a href="{% url 'comic_view' comic.pk %}" class="comic-card" style="text-decoration:none;">
+    <div class="comic-card-thumb">
+      {% with first_panel=comic.panels.first %}
+      {% if first_panel and first_panel.image %}
+        <img src="{{ first_panel.image.url }}" alt="Panel" style="width:100%;height:100%;object-fit:cover;">
+      {% else %}
+        <div class="flex-center" style="height:100%;color:var(--text-muted);font-size:3rem;">🎨</div>
+      {% endif %}
+      {% endwith %}
+    </div>
+    <div class="comic-card-body">
+      <div class="comic-card-title">{{ comic.concept.title }}</div>
+      <div class="flex items-center gap-1 mt-1">
+        <span class="badge badge-purple">{{ comic.get_art_style_display }}</span>
+        <span class="badge badge-blue">{{ comic.get_level_display }}</span>
+      </div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if textbooks %}
+<script>
+// Auto-refresh if any textbook is processing
+const processing = document.querySelectorAll('.status-dot.processing');
+if (processing.length > 0) {
+  setTimeout(() => location.reload(), 8000);
+}
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+
+{% block title %}Register{% endblock %}
+
+{% block body %}
+<div class="auth-page">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="auth-logo-icon">📚</div>
+      <div class="auth-logo-title font-comic">AI Comic Textbook</div>
+      <div class="auth-logo-sub">Start your visual learning journey</div>
+    </div>
+
+    <h2 style="font-size:1.1rem;font-weight:700;margin-bottom:1.5rem;text-align:center;">Create your account</h2>
+
+    {% if form.errors %}
+    <div class="alert alert-error">
+      {% for field, errors in form.errors.items %}
+        {% for error in errors %}{{ error }} {% endfor %}
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="post">
+      {% csrf_token %}
+      <div class="form-group">
+        <label class="form-label">First Name</label>
+        <input type="text" name="first_name" class="form-input" placeholder="Your first name">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Username</label>
+        <input type="text" name="username" class="form-input" placeholder="Choose a username" required autofocus>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input type="email" name="email" class="form-input" placeholder="your@email.com" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input type="password" name="password1" class="form-input" placeholder="Create a strong password" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Confirm Password</label>
+        <input type="password" name="password2" class="form-input" placeholder="Repeat your password" required>
+      </div>
+      <button type="submit" class="btn btn-primary btn-full btn-lg" style="margin-top:0.5rem;">
+        Create Account 🚀
+      </button>
+    </form>
+
+    <div class="divider"></div>
+    <p style="text-align:center;font-size:0.875rem;color:var(--text-muted);">
+      Already have an account? <a href="{% url 'login' %}" class="text-accent">Sign in</a>
+    </p>
+  </div>
+</div>
+{% endblock %}

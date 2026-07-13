@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ textbook.title }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="breadcrumb">
+    <a href="{% url 'dashboard' %}">Dashboard</a>
+    <span class="breadcrumb-sep">›</span>
+    <span>{{ textbook.title|truncatechars:40 }}</span>
+  </div>
+  <div class="flex-between" style="align-items:flex-start; flex-wrap:wrap; gap:1rem;">
+    <div>
+      <h1 class="page-title">{{ textbook.title }}</h1>
+      <p class="page-subtitle">
+        {% if textbook.subject %}{{ textbook.subject }} · {% endif %}
+        {% if textbook.grade_level %}{{ textbook.grade_level }} · {% endif %}
+        {{ textbook.total_pages }} pages
+      </p>
+    </div>
+    <div class="flex gap-1">
+      <a href="{{ textbook.pdf_file.url }}" class="btn btn-secondary btn-sm" target="_blank">📄 View PDF</a>
+      {% if textbook.status != 'processing' %}
+      <form method="post" action="{% url 'textbook_reprocess' textbook.pk %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-secondary btn-sm"
+                onclick="return confirm('Re-process with improved chapter detection? This deletes current chapters and concepts.')">
+          🔄 Re-detect Chapters
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Status Banner -->
+{% if textbook.status == 'processing' %}
+<div class="alert alert-warning" id="processing-banner">
+  <div class="flex items-center gap-2">
+    <div class="spinner" style="width:18px;height:18px;"></div>
+    <div>
+      <strong>AI is analyzing your textbook…</strong>
+      <div style="font-size:0.8rem;margin-top:0.15rem;">Extracting chapters, concepts, and generating quizzes. This takes 1–3 minutes.</div>
+    </div>
+  </div>
+</div>
+{% elif textbook.status == 'ready' %}
+<div class="alert alert-success" style="margin-bottom:1.5rem;">
+  ✅ <strong>Successfully processed!</strong>
+  Found <strong>{{ chapters|length }} chapters</strong> and <strong>{{ textbook.concept_count }} concepts</strong>.
+</div>
+{% elif textbook.status == 'error' %}
+<div class="alert alert-error">
+  ❌ <strong>Processing error:</strong> {{ textbook.error_message|default:"Unknown error" }}
+</div>
+{% endif %}
+
+<!-- Stats Row -->
+<div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); max-width:500px; margin-bottom:2rem;">
+  <div class="stat-card">
+    <div class="stat-value">{{ chapters|length }}</div>
+    <div class="stat-label">Chapters</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ textbook.concept_count }}</div>
+    <div class="stat-label">Concepts</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ textbook.total_pages }}</div>
+    <div class="stat-label">Pages</div>
+  </div>
+</div>
+
+<!-- Chapter List -->
+{% if chapters %}
+<h2 style="font-size:1rem;font-weight:700;margin-bottom:1rem;">📖 Chapters & Concepts</h2>
+<div class="chapter-list">
+  {% for chapter in chapters %}
+  <div class="chapter-item">
+    <div class="chapter-header" onclick="toggleChapter('ch{{ chapter.number }}')">
+      <div>
+        <div class="chapter-number">Chapter {{ chapter.number }}</div>
+        <div class="chapter-title">{{ chapter.title }}</div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="badge badge-blue">{{ chapter.concepts.count }} concepts</span>
+        <span style="color:var(--text-muted); font-size:0.8rem;" id="ch{{ chapter.number }}-arrow">▼</span>
+      </div>
+    </div>
+
+    <div class="chapter-concepts" id="ch{{ chapter.number }}" style="display:{% if forloop.first %}flex{% else %}none{% endif %}">
+      {% for concept in chapter.concepts.all %}
+      <a href="{% url 'concept_detail' concept.pk %}" class="concept-pill">
+        <span>💡</span>
+        {{ concept.title }}
+        <span class="badge badge-{{ concept.difficulty|lower }}" style="
+          {% if concept.difficulty == 'beginner' %}background:rgba(16,185,129,0.15);color:#6ee7b7;
+          {% elif concept.difficulty == 'intermediate' %}background:rgba(245,158,11,0.15);color:#fcd34d;
+          {% else %}background:rgba(239,68,68,0.15);color:#fca5a5;{% endif %}
+          padding:0.15rem 0.4rem; font-size:0.6rem;">{{ concept.get_difficulty_display }}</span>
+      </a>
+      {% empty %}
+      <span style="color:var(--text-muted); font-size:0.8rem; padding:0.5rem 0;">No concepts extracted yet.</span>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% elif textbook.status == 'ready' %}
+<div class="empty-state">
+  <div class="empty-state-icon">🔍</div>
+  <div class="empty-state-title">No chapters detected</div>
+  <div class="empty-state-sub">The PDF might not have standard chapter headings.</div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleChapter(id) {
+  const el = document.getElementById(id);
+  const arrow = document.getElementById(id + '-arrow');
+  if (el.style.display === 'none') {
+    el.style.display = 'flex';
+    arrow.textContent = '▲';
+  } else {
+    el.style.display = 'none';
+    arrow.textContent = '▼';
+  }
+}
+
+// Poll for processing status
+{% if textbook.status == 'processing' %}
+function pollStatus() {
+  fetch('{% url "textbook_status" textbook.pk %}')
+    .then(r => r.json())
+    .then(data => {
+      if (data.status !== 'processing') {
+        location.reload();
+      } else {
+        setTimeout(pollStatus, 4000);
+      }
+    })
+    .catch(() => setTimeout(pollStatus, 5000));
+}
+setTimeout(pollStatus, 4000);
+{% endif %}
+</script>
+{% endblock %}

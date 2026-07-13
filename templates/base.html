@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}AI Comic Textbook{% endblock %} — Learn Visually</title>
+  <meta name="description" content="{% block meta_description %}Transform your textbooks into interactive AI-generated comic lessons. Learn physics, chemistry, history and more through visual storytelling.{% endblock %}">
+  {% load static %}
+  <link rel="stylesheet" href="{% static 'css/main.css' %}">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+{% block body %}
+
+{% if user.is_authenticated %}
+<div class="app-layout">
+  <!-- ─── Sidebar ───────────────────────────────────────────────── -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-icon">📚</div>
+      <div>
+        <div class="sidebar-logo-text">AI Comic<br>Textbook</div>
+        <div class="sidebar-logo-tagline">Learn Visually, Remember Forever</div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="sidebar-section-label">Main</div>
+      <a href="{% url 'dashboard' %}" class="sidebar-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+        <span class="sidebar-link-icon">🏠</span> Dashboard
+      </a>
+      <a href="{% url 'textbook_upload' %}" class="sidebar-link {% if request.resolver_match.url_name == 'textbook_upload' %}active{% endif %}">
+        <span class="sidebar-link-icon">📤</span> Upload Textbook
+      </a>
+
+      <div class="sidebar-section-label">Learning</div>
+      <a href="{% url 'library' %}" class="sidebar-link {% if request.resolver_match.url_name == 'library' %}active{% endif %}">
+        <span class="sidebar-link-icon">🎨</span> My Comics
+      </a>
+      <a href="{% url 'progress' %}" class="sidebar-link {% if request.resolver_match.url_name == 'progress' %}active{% endif %}">
+        <span class="sidebar-link-icon">📈</span> Progress
+      </a>
+
+      <div class="sidebar-section-label">Account</div>
+      <a href="/admin/" class="sidebar-link" target="_blank">
+        <span class="sidebar-link-icon">⚙️</span> Admin
+      </a>
+      <a href="{% url 'logout' %}" class="sidebar-link">
+        <span class="sidebar-link-icon">🚪</span> Logout
+      </a>
+    </nav>
+
+    {% if user.is_authenticated %}
+    <div class="sidebar-bottom">
+      <div class="flex items-center gap-1">
+        <div class="topbar-avatar" style="width:30px;height:30px;font-size:0.75rem;">
+          {{ user.username|first|upper }}
+        </div>
+        <div>
+          <div style="font-size:0.8rem;font-weight:600;">{{ user.username }}</div>
+          <div class="text-xs text-muted">Student</div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </aside>
+
+  <!-- ─── Main Content ──────────────────────────────────────────── -->
+  <div class="main-content">
+    <!-- Topbar -->
+    <header class="topbar">
+      <div class="topbar-search">
+        <span>🔍</span>
+        <input type="text" placeholder="Search concepts, chapters..." id="global-search">
+      </div>
+      <div class="topbar-actions">
+        <span style="font-size:0.8rem;color:var(--text-muted)">Hi, {{ user.first_name|default:user.username }}!</span>
+        <div class="topbar-avatar">{{ user.username|first|upper }}</div>
+      </div>
+    </header>
+
+    <!-- Messages -->
+    {% if messages %}
+    <div style="padding: 0 2rem; margin-top: 1rem;">
+      {% for msg in messages %}
+      <div class="alert alert-{{ msg.tags|default:'info' }}">{{ msg }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Page Content -->
+    <main class="page-content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+
+{% else %}
+  <!-- Non-authenticated layout -->
+  {% block auth_content %}{% endblock %}
+{% endif %}
+
+{% endblock %}
+
+<script>
+// Global search (placeholder)
+document.getElementById('global-search')?.addEventListener('keyup', function(e) {
+  if (e.key === 'Enter') {
+    // TODO: implement search
+  }
+});
+
+// Auto-dismiss alerts
+document.querySelectorAll('.alert').forEach(function(alert) {
+  setTimeout(function() {
+    alert.style.transition = 'opacity 0.5s';
+    alert.style.opacity = '0';
+    setTimeout(function() { alert.remove(); }, 500);
+  }, 4000);
+});
+</script>
+
+{% block extra_js %}{% endblock %}
+</body>
+</html>
